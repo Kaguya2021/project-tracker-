@@ -24,6 +24,12 @@ const initDb = async () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (child_id)
     );
+
+    CREATE TABLE IF NOT EXISTS child_pins (
+      child_id INT PRIMARY KEY,
+      pin VARCHAR(4),
+      updated_at TIMESTAMP
+    );
   `;
   await pool.query(query);
 };
