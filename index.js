@@ -14,7 +14,6 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// Сохранение кода от телефона ребенка
 app.post('/api/set-pin', async (req, res) => {
   const { childId, pin } = req.body;
   try {
@@ -29,41 +28,19 @@ app.post('/api/set-pin', async (req, res) => {
   }
 });
 
-// Проверка кода родителем
-app.post('/api/verify-pin', async (req, res) => {
-  const { childId, pin } = req.body;
+app.get('/api/get-pin/:id', async (req, res) => {
   try {
-    const result = await pool.query(`SELECT pin FROM child_pins WHERE child_id = $1`, [childId]);
-    
-    if ((result.rows.length > 0 && result.rows[0]?.pin === pin) || pin === "0000") {
-      res.json({ valid: true });
+    const result = await pool.query(`SELECT pin FROM child_pins WHERE child_id = $1`, [req.params.id]);
+    if (result.rows.length > 0) {
+      res.json({ pin: result.rows[0].pin });
     } else {
-      res.json({ valid: false });
+      res.json({ pin: null });
     }
   } catch (err) {
-    res.status(500).json({ valid: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Сохранение и рассылка координат в реальном времени
-io.on('connection', (socket) => {
-  socket.on('update_location', async (data) => {
-    const { childId, lat, lng, battery } = data;
-    
-    await pool.query(
-      `INSERT INTO locations (child_id, lat, lng, battery, updated_at) 
-       VALUES ($1, $2, $3, $4, NOW()) 
-       ON CONFLICT (child_id) 
-       DO UPDATE SET lat = $2, lng = $3, battery = $4, updated_at = NOW()`,
-      [childId, lat, lng, battery]
-    );
-
-    io.emit(`location_child_${childId}`, { childId, lat, lng, battery, updatedAt: new Date() });
-    io.emit('all_locations_update', { childId, lat, lng, battery });
-  });
-});
-
-// Эндпоинт для получения списка всех детей и их точек
 app.get('/api/children', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -76,6 +53,32 @@ app.get('/api/children', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+io.on('connection', (socket) => {
+  socket.on('update_location', async (data) => {
+    const { childId, lat, lng, battery } = data;
+    await pool.query(
+      `INSERT INTO locations (child_id, lat, lng, battery, updated_at) 
+       VALUES ($1, $2, $3, $4, NOW()) 
+       ON CONFLICT (child_id) 
+       DO UPDATE SET lat = $2, lng = $3, battery = $4, updated_at = NOW()`,
+      [childId, lat, lng, battery]
+    );
+
+    io.emit(`location_child_${childId}`, { childId, lat, lng, battery, updatedAt: new Date() });
+    io.emit('all_locations_update', { childId, lat, lng, battery });
+  });
+
+  socket.on('update_pin', async (data) => {
+    const { childId, pin } = data;
+    await pool.query(
+      `INSERT INTO child_pins (child_id, pin, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (child_id) DO UPDATE SET pin = $2, updated_at = NOW()`,
+      [childId, pin]
+    );
+    io.emit(`pin_child_${childId}`, { pin });
+  });
 });
 
 const PORT = process.env.PORT || 3000;
