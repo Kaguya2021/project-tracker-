@@ -6,13 +6,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Инициализация таблиц
 const initDb = async () => {
   const query = `
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name VARCHAR(50) NOT NULL,
-      role VARCHAR(10) NOT NULL, -- 'parent' или 'child'
+      role VARCHAR(10) NOT NULL,
       avatar_url TEXT
     );
 
